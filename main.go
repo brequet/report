@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"golang.org/x/net/html"
 )
 
 const (
@@ -125,7 +127,7 @@ func scrapePageBody(pageContent string) (string, error) {
 		return "", fmt.Errorf("no body found in page content")
 	}
 
-	return bodyMatch, nil
+	return cleanBodyContent(bodyMatch), nil
 }
 
 func findFirstMatch(regex string, content string) string {
@@ -136,6 +138,54 @@ func findFirstMatch(regex string, content string) string {
 	} else {
 		return match[1]
 	}
+}
+
+func cleanBodyContent(content string) string {
+	doc, err := html.Parse(strings.NewReader(content))
+	if err != nil {
+		fmt.Println("could not parse content as HTML: %w", err)
+		return content
+	}
+
+	var buf bytes.Buffer
+
+	var traverse func(*html.Node)
+	traverse = func(n *html.Node) {
+		if n.Type == html.TextNode {
+			buf.WriteString(n.Data)
+		} else if n.Type == html.ElementNode {
+			switch n.Data {
+			case "script", "style", "nav", "footer", "header":
+				return
+			case "p", "h1", "h2", "h3", "h4", "h5", "h6", "div":
+				buf.WriteString("\n")
+			case "img":
+				for _, attr := range n.Attr {
+					if attr.Key == "alt" {
+						buf.WriteString("[Image: " + attr.Val + "]")
+						break
+					}
+				}
+				return
+			}
+		}
+
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			traverse(c)
+		}
+
+		if n.Type == html.ElementNode {
+			switch n.Data {
+			case "p", "br", "div":
+				buf.WriteString("\n")
+			}
+		}
+	}
+
+	traverse(doc)
+
+	cleaned := strings.Join(strings.Fields(buf.String()), " ")
+	return cleaned
 }
 
 type GroqMessage struct {
