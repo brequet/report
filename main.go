@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	_ "embed"
 	"encoding/json"
@@ -42,6 +43,10 @@ func main() {
 	if err != nil {
 		fmt.Printf("Error: %+v\n", err)
 		os.Exit(1)
+	}
+	if !isValidWindowsFilename(article.Title) {
+		fmt.Printf("Article title '%s' is not a valid Windows filename\n", article.Title)
+		article.Title = getUserInputtedArticleTitle()
 	}
 
 	groqApiKey := os.Getenv("GROQ_API_KEY")
@@ -354,4 +359,42 @@ func exportArticle(outputFolder string, article Article) error {
 
 	fmt.Printf("Article created successfully: %s\n", outputPath)
 	return nil
+}
+
+func isValidWindowsFilename(filename string) bool {
+	invalidChars := regexp.MustCompile(`[<>:"/\\|?*\x00-\x1F]`)
+	if invalidChars.MatchString(filename) {
+		return false
+	}
+
+	if len(filename) > 255 || len(filename) == 0 {
+		return false
+	}
+
+	if strings.HasSuffix(filename, " ") || strings.HasSuffix(filename, ".") {
+		return false
+	}
+
+	return true
+}
+
+func getUserInputtedArticleTitle() string {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("Please enter a valid filename: ")
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("An error occurred while reading input. Please try again", err)
+			continue
+		}
+
+		// Trim the newline and any spaces
+		input = strings.TrimSpace(input)
+
+		if isValidWindowsFilename(input) {
+			return input
+		} else {
+			fmt.Println("The entered filename is still not valid. Please try again.")
+		}
+	}
 }
